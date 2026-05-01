@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -123,10 +124,12 @@ func (s *Service) ListTransactions(ctx context.Context, limit, offset int, txTyp
 	var txs []AdminTransaction
 	for rows.Next() {
 		var t AdminTransaction
+		var createdAt time.Time
 		if err := rows.Scan(&t.ID, &t.UserID, &t.UserEmail, &t.PartnerID,
-			&t.Amount, &t.Type, &t.Description, &t.CreatedAt); err != nil {
+			&t.Amount, &t.Type, &t.Description, &createdAt); err != nil {
 			return nil, 0, fmt.Errorf("service.ListTransactions: scan: %w", err)
 		}
+		t.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 		txs = append(txs, t)
 	}
 	if err := rows.Err(); err != nil {
@@ -189,9 +192,11 @@ func (s *Service) ListStudents(ctx context.Context, search string, limit, offset
 	var students []Student
 	for rows.Next() {
 		var st Student
-		if err := rows.Scan(&st.ID, &st.Email, &st.Name, &st.StudentID, &st.Balance, &st.CreatedAt); err != nil {
+		var createdAt time.Time
+		if err := rows.Scan(&st.ID, &st.Email, &st.Name, &st.StudentID, &st.Balance, &createdAt); err != nil {
 			return nil, 0, fmt.Errorf("service.ListStudents: scan: %w", err)
 		}
+		st.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 		students = append(students, st)
 	}
 	if err := rows.Err(); err != nil {
