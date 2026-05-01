@@ -32,6 +32,13 @@ type spendRequest struct {
 	Amount  int    `json:"amount"`
 }
 
+// spendResponse is returned on a successful spend; includes new balance for the partner UI.
+type spendResponse struct {
+	Status     string `json:"status"`
+	Spent      int    `json:"spent"`
+	NewBalance int    `json:"new_balance"`
+}
+
 // GenerateQR handles GET /api/v1/me/qr.
 // Returns a one-time QR JWT token with 5-minute TTL for the authenticated student.
 func (h *Handler) GenerateQR(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +74,7 @@ func (h *Handler) Spend(w http.ResponseWriter, r *http.Request) {
 
 	partnerID := middleware.UserIDFromContext(r.Context())
 
-	err := h.service.SpendPoints(r.Context(), SpendRequest{
+	newBalance, err := h.service.SpendPoints(r.Context(), SpendRequest{
 		QRToken:   req.QRToken,
 		Amount:    req.Amount,
 		PartnerID: partnerID,
@@ -87,5 +94,5 @@ func (h *Handler) Spend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	response.JSON(w, http.StatusOK, spendResponse{Status: "ok", Spent: req.Amount, NewBalance: newBalance})
 }

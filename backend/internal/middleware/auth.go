@@ -34,6 +34,12 @@ func UserIDFromContext(ctx context.Context) string {
 	return v
 }
 
+// ContextWithUserID returns a copy of ctx carrying the given userID.
+// Intended only for handler unit tests that bypass Auth middleware.
+func ContextWithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, userIDKey, userID)
+}
+
 // UserRoleFromContext retrieves the authenticated user's role stored by Auth middleware.
 func UserRoleFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(userRoleKey).(string)

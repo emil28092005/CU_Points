@@ -74,14 +74,15 @@ type SpendRequest struct {
 
 // SpendPoints debits the given amount from the student's balance
 // and records a spend transaction atomically in a single DB transaction.
+// Returns the student's new balance on success.
 // Returns ErrInvalidQRToken if the token is malformed or expired.
 // Returns ErrQRAlreadyUsed if the QR token has been redeemed before.
 // Returns ErrInsufficientBalance if balance < amount.
-func (s *Service) SpendPoints(ctx context.Context, req SpendRequest) error {
+func (s *Service) SpendPoints(ctx context.Context, req SpendRequest) (int, error) {
 	// Step 1: validate QR JWT and extract student_id and jti.
 	claims, err := s.parseQRToken(req.QRToken)
 	if err != nil {
-		return ErrInvalidQRToken
+		return 0, ErrInvalidQRToken
 	}
 	studentID := claims.Subject
 	jti := claims.ID
@@ -89,40 +90,41 @@ func (s *Service) SpendPoints(ctx context.Context, req SpendRequest) error {
 	// Step 2: one-time-use check — reject if already redeemed.
 	used, err := s.cache.IsQRUsed(ctx, jti)
 	if err != nil {
-		return fmt.Errorf("service.SpendPoints: cache check: %w", err)
+		return 0, fmt.Errorf("service.SpendPoints: cache check: %w", err)
 	}
 	if used {
-		return ErrQRAlreadyUsed
+		return 0, ErrQRAlreadyUsed
 	}
 
 	// Step 3: pre-check balance for a clear error message before hitting the DB.
 	// The DB CHECK (balance >= 0) is the authoritative guard; this is a fast-fail.
 	balance, err := s.repo.GetBalance(ctx, studentID)
 	if err != nil {
-		return fmt.Errorf("service.SpendPoints: get balance: %w", err)
+		return 0, fmt.Errorf("service.SpendPoints: get balance: %w", err)
 	}
 	if balance < req.Amount {
-		return ErrInsufficientBalance
+		return 0, ErrInsufficientBalance
 	}
 
 	// Step 4–5: debit balance and insert spend transaction atomically.
 	// SpendAtomic uses a DB transaction; the balance CHECK constraint is the
 	// last line of defence against concurrent overdrafts.
-	if err := s.repo.SpendAtomic(ctx, studentID, req.PartnerID, req.Amount); err != nil {
+	newBalance, err := s.repo.SpendAtomic(ctx, studentID, req.PartnerID, req.Amount)
+	if err != nil {
 		// Propagate balance constraint violation with a domain error.
 		if isConstraintError(err) {
-			return ErrInsufficientBalance
+			return 0, ErrInsufficientBalance
 		}
-		return fmt.Errorf("service.SpendPoints: spend atomic: %w", err)
+		return 0, fmt.Errorf("service.SpendPoints: spend atomic: %w", err)
 	}
 
 	// Step 6: mark token as used only after the DB commit succeeds.
 	// If MarkQRUsed fails, the spend already committed — log but don't rollback.
 	if err := s.cache.MarkQRUsed(ctx, jti); err != nil {
-		return fmt.Errorf("service.SpendPoints: mark qr used: %w", err)
+		return 0, fmt.Errorf("service.SpendPoints: mark qr used: %w", err)
 	}
 
-	return nil
+	return newBalance, nil
 }
 
 // GenerateQRToken creates a one-time JWT for the student to present at a partner terminal.

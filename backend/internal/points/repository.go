@@ -18,9 +18,10 @@ type Repository interface {
 	// in a single DB transaction. txType must be "earn" or "admin_grant".
 	EarnAtomic(ctx context.Context, userID string, amount int, txType, description string) error
 	// SpendAtomic debits amount from user balance and inserts a spend transaction
-	// in a single database transaction. The DB CHECK (balance >= 0) is the
-	// authoritative guard; the service also pre-checks to return ErrInsufficientBalance early.
-	SpendAtomic(ctx context.Context, userID, partnerID string, amount int) error
+	// in a single database transaction. Returns the new balance on success.
+	// The DB CHECK (balance >= 0) is the authoritative guard; the service also
+	// pre-checks to return ErrInsufficientBalance early.
+	SpendAtomic(ctx context.Context, userID, partnerID string, amount int) (int, error)
 }
 
 // CacheClient defines the Redis operations needed by the points service.
@@ -91,10 +92,10 @@ func (r *pgRepository) EarnAtomic(ctx context.Context, userID string, amount int
 // transaction, all within a single DB transaction.
 // The negative amount stored in transactions follows the ledger convention:
 // positive = earn, negative = spend.
-func (r *pgRepository) SpendAtomic(ctx context.Context, userID, partnerID string, amount int) error {
+func (r *pgRepository) SpendAtomic(ctx context.Context, userID, partnerID string, amount int) (int, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("repository.SpendAtomic: begin: %w", err)
+		return 0, fmt.Errorf("repository.SpendAtomic: begin: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
@@ -104,7 +105,7 @@ func (r *pgRepository) SpendAtomic(ctx context.Context, userID, partnerID string
 		amount, userID,
 	).Scan(&newBalance)
 	if err != nil {
-		return fmt.Errorf("repository.SpendAtomic: update balance: %w", err)
+		return 0, fmt.Errorf("repository.SpendAtomic: update balance: %w", err)
 	}
 
 	_, err = tx.Exec(ctx,
@@ -113,13 +114,13 @@ func (r *pgRepository) SpendAtomic(ctx context.Context, userID, partnerID string
 		userID, partnerID, -amount,
 	)
 	if err != nil {
-		return fmt.Errorf("repository.SpendAtomic: insert transaction: %w", err)
+		return 0, fmt.Errorf("repository.SpendAtomic: insert transaction: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("repository.SpendAtomic: commit: %w", err)
+		return 0, fmt.Errorf("repository.SpendAtomic: commit: %w", err)
 	}
-	return nil
+	return newBalance, nil
 }
 
 // redisCache is the Redis-backed implementation of CacheClient.

@@ -68,3 +68,44 @@ export interface PaginatedResponse<T> {
 export interface ApiError {
   error: string;
 }
+
+// Returned by POST /api/v1/partner/spend on success.
+export interface SpendResult {
+  status: string;
+  spent: number;
+  new_balance: number;
+}
+
+// Transaction record as seen by an administrator (includes user email).
+export interface AdminTransaction {
+  id: string;
+  user_id: string;
+  user_email: string;
+  partner_id: string;
+  amount: number;
+  type: TransactionType;
+  description: string;
+  created_at: string;
+}
+
+// Student record as seen by an administrator (includes created_at).
+export interface AdminStudent {
+  id: string;
+  email: string;
+  name: string;
+  student_id: string;
+  balance: number;
+  created_at: string;
+}
+
+// Paginated response from GET /api/v1/admin/transactions.
+export interface AdminTransactionPage {
+  transactions: AdminTransaction[];
+  total: number;
+}
+
+// Paginated response from GET /api/v1/admin/users.
+export interface AdminUsersPage {
+  users: AdminStudent[];
+  total: number;
+}

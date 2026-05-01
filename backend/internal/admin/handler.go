@@ -33,6 +33,12 @@ type transactionsResponse struct {
 	Total        int                `json:"total"`
 }
 
+// usersResponse is the JSON body returned by GET /api/v1/admin/users.
+type usersResponse struct {
+	Users []Student `json:"users"`
+	Total int       `json:"total"`
+}
+
 // GrantPoints handles POST /api/v1/admin/points/grant.
 // Accepts {user_id, amount, description}; credits the student's balance.
 // Requires role=admin.
@@ -62,8 +68,7 @@ func (h *Handler) GrantPoints(w http.ResponseWriter, r *http.Request) {
 
 // ListTransactions handles GET /api/v1/admin/transactions.
 // Returns all transactions in the system (paginated), newest first.
-// Query params: limit (default 50, max 200), offset (default 0).
-// Response: { "transactions": [...], "total": N }
+// Query params: limit (default 50, max 200), offset (default 0), type (optional filter).
 func (h *Handler) ListTransactions(w http.ResponseWriter, r *http.Request) {
 	limit := 50
 	offset := 0
@@ -77,8 +82,9 @@ func (h *Handler) ListTransactions(w http.ResponseWriter, r *http.Request) {
 			offset = n
 		}
 	}
+	txType := r.URL.Query().Get("type")
 
-	txs, total, err := h.service.ListTransactions(r.Context(), limit, offset)
+	txs, total, err := h.service.ListTransactions(r.Context(), limit, offset, txType)
 	if err != nil {
 		slog.Error("handler.ListTransactions", "err", err)
 		response.Error(w, http.StatusInternalServerError, "internal server error")
@@ -94,9 +100,24 @@ func (h *Handler) ListTransactions(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListUsers handles GET /api/v1/admin/users.
-// Returns all students with their current balances.
+// Returns all students with balances, sorted by balance desc.
+// Query params: search (optional, filters by email/name), limit (default 50), offset (default 0).
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	students, err := h.service.ListStudents(r.Context())
+	search := r.URL.Query().Get("search")
+	limit := 50
+	offset := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	students, total, err := h.service.ListStudents(r.Context(), search, limit, offset)
 	if err != nil {
 		slog.Error("handler.ListUsers", "err", err)
 		response.Error(w, http.StatusInternalServerError, "internal server error")
@@ -105,7 +126,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if students == nil {
 		students = []Student{}
 	}
-	response.JSON(w, http.StatusOK, students)
+	response.JSON(w, http.StatusOK, usersResponse{Users: students, Total: total})
 }
 
 // Stats handles GET /api/v1/admin/stats.

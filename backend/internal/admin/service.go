@@ -22,7 +22,6 @@ func NewService(db *pgxpool.Pool, pointsSvc *points.Service) *Service {
 }
 
 // AdminTransaction is a transaction record as seen by an administrator.
-// It includes the associated user email for quick identification.
 type AdminTransaction struct {
 	ID          string `json:"id"`
 	UserID      string `json:"user_id"`
@@ -41,6 +40,7 @@ type Student struct {
 	Name      string `json:"name"`
 	StudentID string `json:"student_id,omitempty"`
 	Balance   int    `json:"balance"`
+	CreatedAt string `json:"created_at"`
 }
 
 // Stats holds aggregated system metrics shown on the admin dashboard.
@@ -64,29 +64,57 @@ func (s *Service) GrantPoints(ctx context.Context, userID string, amount int, de
 }
 
 // ListTransactions returns a paginated slice of all transactions in the system
-// (newest first) and the total row count for pagination metadata.
-func (s *Service) ListTransactions(ctx context.Context, limit, offset int) ([]AdminTransaction, int, error) {
+// (newest first) and the total row count. txType filters by transaction type when non-empty.
+func (s *Service) ListTransactions(ctx context.Context, limit, offset int, txType string) ([]AdminTransaction, int, error) {
 	var total int
-	err := s.db.QueryRow(ctx, `SELECT COUNT(*) FROM transactions`).Scan(&total)
+	var err error
+
+	if txType != "" {
+		err = s.db.QueryRow(ctx, `SELECT COUNT(*) FROM transactions WHERE type = $1`, txType).Scan(&total)
+	} else {
+		err = s.db.QueryRow(ctx, `SELECT COUNT(*) FROM transactions`).Scan(&total)
+	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("service.ListTransactions: count: %w", err)
 	}
 
-	rows, err := s.db.Query(ctx, `
-		SELECT t.id,
-		       t.user_id,
-		       u.email,
-		       COALESCE(t.partner_id::text, ''),
-		       t.amount,
-		       t.type,
-		       COALESCE(t.description, ''),
-		       t.created_at
-		FROM transactions t
-		JOIN users u ON u.id = t.user_id
-		ORDER BY t.created_at DESC
-		LIMIT $1 OFFSET $2`,
-		limit, offset,
-	)
+	var query string
+	var args []any
+
+	if txType != "" {
+		query = `
+			SELECT t.id,
+			       t.user_id,
+			       u.email,
+			       COALESCE(t.partner_id::text, ''),
+			       t.amount,
+			       t.type,
+			       COALESCE(t.description, ''),
+			       t.created_at
+			FROM transactions t
+			JOIN users u ON u.id = t.user_id
+			WHERE t.type = $3
+			ORDER BY t.created_at DESC
+			LIMIT $1 OFFSET $2`
+		args = []any{limit, offset, txType}
+	} else {
+		query = `
+			SELECT t.id,
+			       t.user_id,
+			       u.email,
+			       COALESCE(t.partner_id::text, ''),
+			       t.amount,
+			       t.type,
+			       COALESCE(t.description, ''),
+			       t.created_at
+			FROM transactions t
+			JOIN users u ON u.id = t.user_id
+			ORDER BY t.created_at DESC
+			LIMIT $1 OFFSET $2`
+		args = []any{limit, offset}
+	}
+
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("service.ListTransactions: query: %w", err)
 	}
@@ -107,31 +135,69 @@ func (s *Service) ListTransactions(ctx context.Context, limit, offset int) ([]Ad
 	return txs, total, nil
 }
 
-// ListStudents returns all users with role=student, ordered by name.
-func (s *Service) ListStudents(ctx context.Context) ([]Student, error) {
-	rows, err := s.db.Query(ctx,
-		`SELECT id, email, name, COALESCE(student_id, ''), balance
-		 FROM users
-		 WHERE role = 'student'
-		 ORDER BY name`,
-	)
+// ListStudents returns students with optional search and pagination.
+// search filters by email or name (case-insensitive); empty string returns all.
+// Results are sorted by balance DESC when no search term, by name when searching.
+func (s *Service) ListStudents(ctx context.Context, search string, limit, offset int) ([]Student, int, error) {
+	var total int
+	var err error
+
+	if search != "" {
+		err = s.db.QueryRow(ctx,
+			`SELECT COUNT(*) FROM users
+			 WHERE role = 'student'
+			   AND (email ILIKE '%' || $1 || '%' OR name ILIKE '%' || $1 || '%')`,
+			search,
+		).Scan(&total)
+	} else {
+		err = s.db.QueryRow(ctx,
+			`SELECT COUNT(*) FROM users WHERE role = 'student'`,
+		).Scan(&total)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("service.ListStudents: %w", err)
+		return nil, 0, fmt.Errorf("service.ListStudents: count: %w", err)
+	}
+
+	var query string
+	var args []any
+
+	if search != "" {
+		query = `
+			SELECT id, email, name, COALESCE(student_id, ''), balance, created_at
+			FROM users
+			WHERE role = 'student'
+			  AND (email ILIKE '%' || $1 || '%' OR name ILIKE '%' || $1 || '%')
+			ORDER BY name
+			LIMIT $2 OFFSET $3`
+		args = []any{search, limit, offset}
+	} else {
+		query = `
+			SELECT id, email, name, COALESCE(student_id, ''), balance, created_at
+			FROM users
+			WHERE role = 'student'
+			ORDER BY balance DESC
+			LIMIT $1 OFFSET $2`
+		args = []any{limit, offset}
+	}
+
+	rows, err := s.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("service.ListStudents: query: %w", err)
 	}
 	defer rows.Close()
 
 	var students []Student
 	for rows.Next() {
 		var st Student
-		if err := rows.Scan(&st.ID, &st.Email, &st.Name, &st.StudentID, &st.Balance); err != nil {
-			return nil, fmt.Errorf("service.ListStudents: scan: %w", err)
+		if err := rows.Scan(&st.ID, &st.Email, &st.Name, &st.StudentID, &st.Balance, &st.CreatedAt); err != nil {
+			return nil, 0, fmt.Errorf("service.ListStudents: scan: %w", err)
 		}
 		students = append(students, st)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("service.ListStudents: rows: %w", err)
+		return nil, 0, fmt.Errorf("service.ListStudents: rows: %w", err)
 	}
-	return students, nil
+	return students, total, nil
 }
 
 // GetStats returns aggregated system statistics for the admin dashboard.
