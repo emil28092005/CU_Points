@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { StudentNav } from '@/components/StudentNav';
 import { TransactionList } from '@/components/TransactionList';
 import { Button } from '@/components/ui';
