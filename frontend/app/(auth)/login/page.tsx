@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button, Input, Card } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
@@ -29,7 +28,6 @@ const ROLE_REDIRECT: Record<UserRole, string> = {
 };
 
 export default function LoginPage() {
-  const router = useRouter();
   const { setTokens, setUser } = useAuthStore();
 
   const [email, setEmail] = useState('');
@@ -52,7 +50,9 @@ export default function LoginPage() {
       if (!role) throw new Error('Не удалось определить роль пользователя');
 
       setUser({ ...profile, role });
-      router.push(ROLE_REDIRECT[role]);
+      // Hard redirect so the browser sends a fresh request with the new cookie.
+      // router.push() can use a stale Next.js router cache and miss the cookie.
+      window.location.href = ROLE_REDIRECT[role];
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка входа');
     } finally {

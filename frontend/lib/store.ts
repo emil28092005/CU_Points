@@ -22,7 +22,7 @@ function persistToken(accessToken: string): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem('access_token', accessToken);
   // 15 min lifetime matches the default JWT_ACCESS_TTL
-  document.cookie = `access_token=${accessToken}; path=/; SameSite=Strict; max-age=900`;
+  document.cookie = `access_token=${accessToken}; path=/; SameSite=Lax; max-age=900`;
 }
 
 export const useAuthStore = create<AuthState>()(
