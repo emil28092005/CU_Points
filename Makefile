@@ -2,6 +2,10 @@
 -include .env
 export
 
+# Ensure Go and user Go binaries are always on PATH (needed on servers where
+# /etc/profile.d is only sourced for login shells, not by make).
+export PATH := /usr/local/go/bin:$(HOME)/go/bin:$(PATH)
+
 .PHONY: install build \
         docker-up docker-down migrate-up migrate-down \
         run-backend run-frontend \
@@ -32,10 +36,10 @@ docker-down:
 	docker compose down
 
 migrate-up:
-	PATH=$$HOME/go/bin:$$PATH goose -dir migrations postgres "$(DATABASE_URL)" up
+	goose -dir migrations postgres "$(DATABASE_URL)" up
 
 migrate-down:
-	PATH=$$HOME/go/bin:$$PATH goose -dir migrations postgres "$(DATABASE_URL)" down
+	goose -dir migrations postgres "$(DATABASE_URL)" down
 
 ## ── Production servers (require `make build` first) ─────────────────────────
 
@@ -50,7 +54,7 @@ run-frontend:
 ## ── Development servers (hot reload) ────────────────────────────────────────
 
 dev-backend:
-	cd backend && PATH=$$HOME/go/bin:$$PATH air
+	cd backend && air
 
 dev-frontend:
 	cd frontend && env -u PORT npm run dev
