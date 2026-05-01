@@ -51,10 +51,12 @@ export const useAuthStore = create<AuthState>()(
         if (typeof window !== 'undefined') {
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
-          // Clear the auth cookie so middleware stops treating this session as logged in.
           document.cookie = 'access_token=; path=/; max-age=0';
         }
         set({ accessToken: null, refreshToken: null, user: null });
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
       },
     }),
     { name: 'cu-points-auth' }
