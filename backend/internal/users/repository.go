@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -95,9 +96,11 @@ func (r *Repository) ListTransactions(ctx context.Context, userID string, limit,
 	var txs []Transaction
 	for rows.Next() {
 		var t Transaction
-		if err := rows.Scan(&t.ID, &t.Amount, &t.Type, &t.Description, &t.PartnerID, &t.CreatedAt); err != nil {
+		var createdAt time.Time
+		if err := rows.Scan(&t.ID, &t.Amount, &t.Type, &t.Description, &t.PartnerID, &createdAt); err != nil {
 			return nil, fmt.Errorf("repository.ListTransactions: scan: %w", err)
 		}
+		t.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 		txs = append(txs, t)
 	}
 	if err := rows.Err(); err != nil {
