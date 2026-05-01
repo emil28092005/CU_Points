@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { StudentNav } from '@/components/StudentNav';
 import { BalanceCard } from '@/components/BalanceCard';
 import { TransactionList } from '@/components/TransactionList';
 import { Spinner } from '@/components/ui';
@@ -58,6 +59,8 @@ export default function StudentDashboardPage() {
   const balance = profile?.balance ?? user?.balance ?? 0;
 
   return (
+    <div className="min-h-screen">
+      <StudentNav />
     <main className="mx-auto max-w-lg space-y-6 p-4 pb-10 pt-6">
       <h1 className="text-xl font-bold text-white">
         Привет, {displayName.split(' ')[0]} 👋
@@ -77,5 +80,6 @@ export default function StudentDashboardPage() {
         </div>
       </section>
     </main>
+    </div>
   );
 }

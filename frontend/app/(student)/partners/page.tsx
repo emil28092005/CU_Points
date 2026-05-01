@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { StudentNav } from '@/components/StudentNav';
 import { PartnerCard } from '@/components/PartnerCard';
 import { Spinner } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -27,13 +27,10 @@ export default function PartnersPage() {
   }, []);
 
   return (
+    <div className="min-h-screen">
+      <StudentNav />
     <main className="mx-auto max-w-lg p-4 pb-10 pt-6">
-      <div className="mb-4 flex items-center gap-3">
-        <Link href="/dashboard" className="text-sm text-blue-400 hover:text-blue-300">
-          ← Назад
-        </Link>
-        <h1 className="text-xl font-bold text-white">Партнёры</h1>
-      </div>
+      <h1 className="mb-4 text-xl font-bold text-white">Партнёры</h1>
 
       {loading && (
         <div className="flex justify-center py-12">
@@ -57,5 +54,6 @@ export default function PartnersPage() {
         </div>
       )}
     </main>
+    </div>
   );
 }

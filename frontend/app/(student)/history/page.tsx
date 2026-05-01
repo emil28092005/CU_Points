@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { StudentNav } from '@/components/StudentNav';
 import { TransactionList } from '@/components/TransactionList';
 import { Button } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -49,13 +50,10 @@ export default function HistoryPage() {
   const hasMore = transactions.length < total;
 
   return (
+    <div className="min-h-screen">
+      <StudentNav />
     <main className="mx-auto max-w-lg p-4 pb-10 pt-6">
-      <div className="mb-4 flex items-center gap-3">
-        <Link href="/dashboard" className="text-sm text-blue-400 hover:text-blue-300">
-          ← Назад
-        </Link>
-        <h1 className="text-xl font-bold text-white">История операций</h1>
-      </div>
+      <h1 className="mb-4 text-xl font-bold text-white">История операций</h1>
 
       {error && (
         <p className="mb-4 rounded-lg bg-red-900/30 px-3 py-2 text-sm text-red-400">{error}</p>
@@ -77,5 +75,6 @@ export default function HistoryPage() {
         <p className="mt-4 text-center text-xs text-gray-600">Это все операции</p>
       )}
     </main>
+    </div>
   );
 }
