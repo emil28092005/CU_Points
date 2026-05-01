@@ -2,6 +2,9 @@
 .env
 *.env.local
 
+# Runtime logs and PID files
+logs/
+
 # Go
 backend/vendor/
 backend/coverage.out

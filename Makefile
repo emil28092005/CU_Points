@@ -8,7 +8,7 @@ export PATH := /usr/local/go/bin:$(HOME)/go/bin:$(PATH)
 
 .PHONY: install build \
         docker-up docker-down migrate-up migrate-down \
-        run-backend run-frontend \
+        run-backend run-frontend stop-backend stop-frontend logs-backend logs-frontend \
         dev-backend dev-frontend \
         test test-coverage lint seed
 
@@ -43,13 +43,27 @@ migrate-down:
 
 ## ── Production servers (require `make build` first) ─────────────────────────
 
-# Run the compiled Go binary.
 run-backend:
-	cd backend && ./bin/api
+	mkdir -p logs
+	nohup backend/bin/api > logs/backend.log 2>&1 & echo $$! > logs/backend.pid
+	@echo "Backend started (pid $$(cat logs/backend.pid)) — logs/backend.log"
 
-# Run the Next.js production server on port 3001.
 run-frontend:
-	cd frontend && env -u PORT npx next start -p 3001
+	mkdir -p logs
+	nohup sh -c 'cd frontend && env -u PORT npx next start -p 3001' > logs/frontend.log 2>&1 & echo $$! > logs/frontend.pid
+	@echo "Frontend started (pid $$(cat logs/frontend.pid)) — logs/frontend.log"
+
+stop-backend:
+	@[ -f logs/backend.pid ] && kill $$(cat logs/backend.pid) && rm logs/backend.pid && echo "Backend stopped" || echo "Backend not running"
+
+stop-frontend:
+	@[ -f logs/frontend.pid ] && kill $$(cat logs/frontend.pid) && rm logs/frontend.pid && echo "Frontend stopped" || echo "Frontend not running"
+
+logs-backend:
+	tail -f logs/backend.log
+
+logs-frontend:
+	tail -f logs/frontend.log
 
 ## ── Development servers (hot reload) ────────────────────────────────────────
 
